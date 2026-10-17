@@ -1,0 +1,51 @@
+name: Rust checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev
+      - name: Install Rust
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - name: Check translation catalog
+        run: python3 scripts/update-translations.py --check
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked --all-targets
+      - name: Build application
+        run: cargo build --locked
+
+  helper:
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 20
+    steps:
+      - name: Install native helper build and fixture test dependencies
+        run: pacman -Syu --noconfirm --needed rust git libarchive pkgconf polkit
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Test GUI, protocol, and helper with disposable databases
+        run: cargo test --locked --features system-helper --all-targets
+      - name: Build both binaries
+        run: cargo build --locked --features system-helper --bins
